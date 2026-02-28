@@ -1,109 +1,130 @@
-import React, { useState, useEffect } from 'react';
-import { Play, PlusCircle, Lock, Database, CheckCircle, ArrowLeft, Trash2 } from 'lucide-react';
-// @ts-ignore
-import { createClient } from '@supabase/supabase-js';
+import React, { useState } from 'react';
 
-// --- SUPABASE BAĞLANTISI ---
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
+// --- GÜVENLİ İKONLAR (SVG) ---
+const PlayIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>;
+const LockIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 
 export default function App() {
   const [view, setView] = useState('welcome');
   const [lang, setLang] = useState('tr');
-  const [isLogged, setIsLogged] = useState(false);
   const [pass, setPass] = useState('');
-  const [pending, setPending] = useState([]);
+  const [isLogged, setIsLogged] = useState(false);
 
   const t = {
-    tr: { title: "KÊ NAXWAZE BI SERKEVE", start: "BAŞLA", submit: "Soru Gönder", subtitle: "İzmir Patnoslular Derneği Ürünüdür", back: "Geri" },
-    ku: { title: "KÊ NAXWAZE BI SERKEVE", start: "DEST PÊ BIKE", submit: "Pirsê Bişîne", subtitle: "Berhema Komeleya Patnosiyên Îzmîrê ye", back: "Vegere" }
+    tr: { title: "KÊ NAXWAZE BI SERKEVE", start: "BAŞLA", submit: "Soru Gönder", subtitle: "İzmir Patnoslular Derneği Ürünüdür" },
+    ku: { title: "KÊ NAXWAZE BI SERKEVE", start: "DEST PÊ BIKE", submit: "Pirsê Bişîne", subtitle: "Berhema Komeleya Patnosiyên Îzmîrê ye" }
   }[lang];
 
-  // Admin Soruları Çekme
-  const fetchPending = async () => {
-    const { data } = await supabase.from('questions').select('*').eq('is_approved', false);
-    setPending(data || []);
-  };
-
-  const approve = async (id) => {
-    await supabase.from('questions').update({ is_approved: true }).eq('id', id);
-    fetchPending();
-  };
-
-  // --- GÖRÜNÜMLER ---
-
-  // 1. ADMIN GİRİŞ VE PANELİ
+  // --- ADMIN PANELİ ---
   if (view === 'admin') {
     if (!isLogged) return (
-      <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-6 text-white font-sans">
-        <div className="bg-[#0f172a] border border-white/10 p-10 rounded-[40px] w-full max-w-sm text-center shadow-2xl">
-          <Lock size={48} className="mx-auto text-yellow-500 mb-6" />
-          <h2 className="mb-6 font-bold">Admin Girişi</h2>
-          <input type="password" placeholder="Şifre" className="w-full p-4 bg-slate-800 rounded-2xl mb-4 text-center outline-none border border-white/5" onChange={e => setPass(e.target.value)} />
-          <div className="flex gap-2">
-            <button onClick={() => setView('welcome')} className="flex-1 py-4 bg-slate-800 rounded-2xl font-bold">İPTAL</button>
-            <button onClick={() => { if(pass === '1234') { setIsLogged(true); fetchPending(); } else alert("Hatalı!"); }} className="flex-1 py-4 bg-yellow-600 rounded-2xl font-bold">GİRİŞ</button>
-          </div>
+      <div style={{ backgroundColor: '#070b14', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontFamily: 'sans-serif' }}>
+        <div style={{ background: '#0f172a', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '300px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <h2 style={{ marginBottom: '20px' }}>Admin Girişi</h2>
+          <input type="password" placeholder="Şifre" style={{ width: '100%', padding: '12px', borderRadius: '10px', marginBottom: '15px', border: 'none', textAlign: 'center' }} onChange={e => setPass(e.target.value)} />
+          <button onClick={() => { if(pass === '1234') setIsLogged(true); else alert("Hatalı!"); }} style={{ width: '100%', padding: '12px', background: '#ca8a04', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>GİRİŞ</button>
+          <button onClick={() => setView('welcome')} style={{ marginTop: '10px', background: 'none', color: '#64748b', border: 'none', cursor: 'pointer' }}>Geri Dön</button>
         </div>
       </div>
     );
     return (
-      <div className="min-h-screen bg-[#070b14] text-white p-6 font-sans">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-10">
-            <h1 className="text-2xl font-bold flex items-center gap-3"><Database className="text-yellow-500"/> Onay Bekleyenler ({pending.length})</h1>
-            <button onClick={() => { setIsLogged(false); setView('welcome'); }} className="text-slate-400 font-bold">Çıkış Yap</button>
-          </div>
-          <div className="grid gap-4">
-            {pending.map(q => (
-              <div key={q.id} className="bg-[#0f172a] border border-white/10 p-6 rounded-2xl flex justify-between items-center">
-                <p className="text-lg">{q.question_text}</p>
-                <button onClick={() => approve(q.id)} className="p-4 bg-green-600/20 text-green-500 rounded-2xl hover:bg-green-600 hover:text-white transition-colors"><CheckCircle/></button>
-              </div>
-            ))}
-            {pending.length === 0 && <p className="text-center py-20 text-slate-500 italic">Bekleyen soru bulunamadı.</p>}
-          </div>
-        </div>
+      <div style={{ backgroundColor: '#070b14', minHeight: '100vh', padding: '40px', color: 'white', fontFamily: 'sans-serif' }}>
+        <h1>Admin Paneli</h1>
+        <p>Onay bekleyen soru yok.</p>
+        <button onClick={() => { setView('welcome'); setIsLogged(false); }} style={{ color: '#ca8a04', background: 'none', border: 'none', cursor: 'pointer' }}>Çıkış Yap</button>
       </div>
     );
   }
 
-  // 2. ANA SAYFA
+  // --- ANA SAYFA ---
   return (
-    <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-6 font-sans">
-      <div className="w-full max-w-md text-center">
-        <div className="bg-[#0f172a] border border-white/10 p-10 rounded-[48px] shadow-2xl relative overflow-hidden">
-          {/* Süsleme için hafif bir ışık */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-yellow-600/10 blur-[100px]"></div>
-          
-          <img src="https://static.wixstatic.com/media/7e2174_63be697a3dd64d06b050165599965a9a~mv2.png" className="h-28 mx-auto mb-8 drop-shadow-[0_0_15px_rgba(234,179,8,0.3)]" alt="Logo" />
-          
-          <h1 className="text-3xl font-black text-white mb-2 tracking-tighter uppercase">{t.title}</h1>
-          <p className="text-yellow-500 font-bold text-[10px] tracking-[0.2em] mb-10 uppercase opacity-80">{t.subtitle}</p>
-          
-          <div className="flex justify-center gap-3 mb-10">
-            {['ku', 'tr'].map((l) => (
-              <button key={l} onClick={() => setLang(l)} className={`px-5 py-2 rounded-xl text-xs font-black transition-all border ${lang === l ? 'bg-yellow-500 text-black border-yellow-500 shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`}>{l.toUpperCase()}</button>
-            ))}
-          </div>
+    <div style={{ 
+      backgroundColor: '#070b14', 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      fontFamily: 'sans-serif',
+      backgroundImage: 'radial-gradient(circle at top, #1e293b 0%, #070b14 70%)'
+    }}>
+      <div style={{ 
+        backgroundColor: 'rgba(15, 23, 42, 0.8)', 
+        backdropFilter: 'blur(20px)',
+        padding: '50px 30px', 
+        borderRadius: '50px', 
+        textAlign: 'center', 
+        width: '100%', 
+        maxWidth: '380px',
+        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+      }}>
+        
+        <img 
+          src="https://static.wixstatic.com/media/7e2174_63be697a3dd64d06b050165599965a9a~mv2.png" 
+          style={{ height: '110px', marginBottom: '20px', filter: 'drop-shadow(0 0 10px rgba(202, 138, 4, 0.3))' }} 
+          alt="Logo" 
+        />
+        
+        <h1 style={{ color: 'white', fontSize: '24px', fontWeight: '900', margin: '0 0 5px 0', letterSpacing: '-1px' }}>{t.title}</h1>
+        <p style={{ color: '#ca8a04', fontSize: '10px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '30px' }}>{t.subtitle}</p>
 
-          <div className="flex flex-col gap-4">
-            <button className="group py-5 bg-yellow-600 hover:bg-yellow-500 rounded-[24px] font-black text-white text-xl tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3">
-              <Play fill="white" size={24} className="group-hover:scale-110 transition-transform" /> {t.start}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '30px' }}>
+          {['ku', 'tr'].map(l => (
+            <button 
+              key={l}
+              onClick={() => setLang(l)} 
+              style={{ 
+                padding: '8px 20px', 
+                borderRadius: '12px', 
+                border: lang === l ? '2px solid #ca8a04' : '1px solid rgba(255,255,255,0.1)', 
+                backgroundColor: lang === l ? '#ca8a04' : 'transparent',
+                color: lang === l ? 'black' : '#94a3b8',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: '0.3s'
+              }}>
+              {l.toUpperCase()}
             </button>
-            
-            <button className="py-4 bg-white/5 border border-white/10 rounded-[22px] font-bold text-slate-200 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-              <PlusCircle size={20}/> {t.submit}
-            </button>
-
-            {/* Gizli Admin Girişi - Küçük ve Altta */}
-            <button onClick={() => setView('admin')} className="mt-6 text-slate-700 hover:text-slate-500 text-[9px] font-bold tracking-widest uppercase flex items-center justify-center gap-1 transition-colors">
-              <Lock size={10}/> Admin Control
-            </button>
-          </div>
+          ))}
         </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <button style={{ 
+            padding: '18px', 
+            backgroundColor: '#ca8a04', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '20px', 
+            fontSize: '18px', 
+            fontWeight: '900', 
+            letterSpacing: '2px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px'
+          }}>
+            <PlayIcon /> {t.start}
+          </button>
+
+          <button style={{ 
+            padding: '15px', 
+            backgroundColor: 'rgba(255,255,255,0.05)', 
+            color: '#e2e8f0', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '18px', 
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}>
+            {t.submit}
+          </button>
+        </div>
+
+        <button 
+          onClick={() => setView('admin')}
+          style={{ marginTop: '30px', background: 'none', border: 'none', color: '#334155', fontSize: '10px', fontWeight: 'bold', letterSpacing: '1px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', width: '100%' }}>
+          <LockIcon /> ADMIN CONTROL
+        </button>
       </div>
     </div>
   );
