@@ -1,35 +1,23 @@
 import express from "express";
-import { createServer as createViteServer } from "vite"; 
-import Database from "better-sqlite3";
+import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("questions.db");
-
-// Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question TEXT NOT NULL,
-    optionA TEXT NOT NULL,
-    optionB TEXT NOT NULL,
-    optionC TEXT NOT NULL,
-    optionD TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    level INTEGER NOT NULL,
-    status TEXT DEFAULT 'pending'
-  )
-`);
+// Supabase Bağlantısı
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function startServer() {
   const app = express();
   app.use(express.json());
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
-  // API Routes
+  // API: Admin Girişi
   app.post("/api/admin/login", (req, res) => {
     const { password } = req.body;
     if (password === "Mihriban04") {
@@ -39,52 +27,37 @@ async function startServer() {
     }
   });
 
-  app.post("/api/questions/submit", (req, res) => {
+  // API: Soru Gönder (Supabase'e kaydeder)
+  app.post("/api/questions/submit", async (req, res) => {
     const { question, options, answer, level } = req.body;
     try {
-      const stmt = db.prepare(`
-        INSERT INTO questions (question, optionA, optionB, optionC, optionD, answer, level, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-      `);
-      stmt.run(question, options[0], options[1], options[2], options[3], answer, level);
+      const { error } = await supabase
+        .from('questions')
+        .insert([{ 
+          question_text: question, 
+          options: options, 
+          correct_answer: answer, 
+          difficulty: level.toString(),
+          category: 'Genel'
+        }]);
+      
+      if (error) throw error;
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ success: false, error: (error as Error).message });
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 
-  app.get("/api/questions/pending", (req, res) => {
-    // In a real app, we'd check the auth token
-    const questions = db.prepare("SELECT * FROM questions WHERE status = 'pending'").all();
-    res.json(questions);
+  // API: Onay Bekleyen Soruları Getir
+  app.get("/api/questions/pending", async (req, res) => {
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*');
+    if (error) return res.status(500).json([]);
+    res.json(data);
   });
 
-  app.post("/api/questions/approve", (req, res) => {
-    const { id } = req.body;
-    try {
-      db.prepare("UPDATE questions SET status = 'approved' WHERE id = ?").run(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ success: false });
-    }
-  });
-
-  app.post("/api/questions/reject", (req, res) => {
-    const { id } = req.body;
-    try {
-      db.prepare("DELETE FROM questions WHERE id = ?").run(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ success: false });
-    }
-  });
-
-  app.get("/api/questions/approved", (req, res) => {
-    const questions = db.prepare("SELECT * FROM questions WHERE status = 'approved'").all();
-    res.json(questions);
-  });
-
-  // Vite middleware for development
+  // Vite ve Statik Dosyalar
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -98,8 +71,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`Server running`);
   });
 }
 
