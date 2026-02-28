@@ -1,84 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  PlusCircle, Lock, Database, ArrowLeft, Trash2, CheckCircle, 
-  CheckCircle2, Loader2, Play, Trophy 
+  Trophy, Users, Phone, Split, Play, PlusCircle, Lock, 
+  ArrowLeft, CheckCircle, Trash2, Loader2, X 
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- SUPABASE BAĞLANTISI (Vite standartlarına uygun) ---
+// --- SUPABASE AYARI ---
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL || '',
   import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 );
 
-// --- DİLLER ---
-const TRANSLATIONS = {
-  ku: { title: "KÊ NAXWAZE BI SERKEVE", start: "DEST PÊ BIKE", submit_q: "Pirsê Bişîne", admin: "Admin", back: "Vegere" },
-  tr: { title: "KÊ NAXWAZE BI SERKEVE", start: "BAŞLA", submit_q: "Soru Gönder", admin: "Admin Paneli", back: "Geri" },
-  en: { title: "WHO WANTS TO WIN", start: "START", submit_q: "Submit Q", admin: "Admin", back: "Back" }
+// --- OYUN SABİTLERİ ---
+const RANK_TITLES = {
+  ku: ["Nûhat", "Zana", "Pispor", "Ustad", "Dahî"],
+  tr: ["Çaylak", "Bilgin", "Uzman", "Üstad", "Deha"],
+  en: ["Beginner", "Scholar", "Expert", "Master", "Genius"]
 };
 
-// --- SORU GÖNDERME EKRANI ---
-function SubmitQuestionView({ onBack, lang }: { onBack: () => void, lang: 'ku'|'tr'|'en' }) {
-  const [q, setQ] = useState('');
-  const [opts, setOpts] = useState(['', '', '', '']);
-  const [ans, setAns] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
-
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if(!q || opts.some(o => !o) || !ans) return alert("Lütfen tüm alanları doldurun!");
-    setLoading(true);
-    
-    const { error } = await supabase.from('questions').insert([{
-      question_text: q,
-      options: opts,
-      correct_answer: ans,
-      difficulty: 1,
-      is_approved: false,
-      language: lang
-    }]);
-
-    if (error) alert("Hata: " + error.message);
-    else { setDone(true); setTimeout(onBack, 2000); }
-    setLoading(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 p-4 flex items-center justify-center">
-      <div className="bg-slate-900 border border-slate-800 p-6 w-full max-w-lg rounded-2xl shadow-2xl">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-500 mb-4 hover:text-white transition-colors"><ArrowLeft size={18}/> Geri</button>
-        {done ? <div className="text-center py-10 text-green-500 font-bold">Soru başarıyla gönderildi!</div> : (
-          <form onSubmit={send} className="space-y-4">
-            <textarea placeholder="Soru metni..." className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 h-24 outline-none focus:border-yellow-500" value={q} onChange={e=>setQ(e.target.value)} />
-            <div className="grid grid-cols-2 gap-2">
-              {opts.map((o,i) => <input key={i} placeholder={`${i+1}. Seçenek`} className="bg-slate-800 text-white p-2 rounded-lg border border-slate-700 outline-none focus:border-yellow-500" value={o} onChange={e=>{const n=[...opts]; n[i]=e.target.value; setOpts(n)}} />)}
-            </div>
-            <select className="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 outline-none" value={ans} onChange={e=>setAns(e.target.value)}>
-              <option value="">Doğru Cevabı Seçin</option>
-              {opts.map((o,i) => o && <option key={i} value={o}>{o}</option>)}
-            </select>
-            <button type="submit" disabled={loading} className="w-full py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-xl transition-all">{loading ? "Gönderiliyor..." : "SORUYU GÖNDER"}</button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --- ANA UYGULAMA ---
 export default function App() {
-  const [view, setView] = useState<'home' | 'submit' | 'admin'>('home');
-  const [lang, setLang] = useState<'ku'|'tr'|'en'>('tr');
-  const [adminPass, setAdminPass] = useState('');
+  const [view, setView] = useState<'home' | 'game' | 'submit' | 'admin'>('home');
+  const [lang, setLang] = useState<'ku' | 'tr' | 'en'>('tr');
   const [isLogged, setIsLogged] = useState(false);
+  const [pass, setPass] = useState('');
   const [pending, setPending] = useState<any[]>([]);
 
+  // Soru Gönder Formu
+  const [formData, setFormData] = useState({ q: '', o: ['', '', '', ''], a: '', lv: 1 });
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+
+  // --- SORU GÖNDERME ---
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.q || formData.o.some(x => !x) || !formData.a) return alert("Lütfen tüm alanları doldurun!");
+    setStatus('loading');
+    const { error } = await supabase.from('questions').insert([{
+      question_text: formData.q,
+      options: formData.o,
+      correct_answer: formData.a,
+      difficulty: formData.lv,
+      language: lang,
+      is_approved: false
+    }]);
+    if (error) { alert("Hata: " + error.message); setStatus('idle'); }
+    else { setStatus('success'); setTimeout(() => { setView('home'); setStatus('idle'); }, 2000); }
+  };
+
+  // --- ADMIN ---
   const fetchPending = async () => {
     const { data } = await supabase.from('questions').select('*').eq('is_approved', false);
-    if(data) setPending(data);
+    setPending(data || []);
   };
 
   const approve = async (id: number) => {
@@ -86,66 +58,108 @@ export default function App() {
     fetchPending();
   };
 
-  if (view === 'submit') return <SubmitQuestionView lang={lang} onBack={()=>setView('home')} />;
+  // --- EKRANLAR ---
+  if (view === 'submit') return (
+    <div className="min-h-screen bg-[#070b14] text-white p-6 flex flex-col items-center">
+      <div className="w-full max-w-lg">
+        <button onClick={() => setView('home')} className="flex items-center gap-2 mb-8 text-slate-400 hover:text-white"><ArrowLeft size={20}/> Geri</button>
+        <div className="bg-slate-900/50 border border-white/10 p-8 rounded-[32px] backdrop-blur-xl">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><PlusCircle className="text-yellow-500"/> Soru Öner</h2>
+          {status === 'success' ? (
+            <div className="text-center py-10">
+              <div className="bg-green-500/20 text-green-500 p-4 rounded-2xl font-bold">Soru başarıyla gönderildi! Admin onayından sonra yayına alınacaktır.</div>
+            </div>
+          ) : (
+            <form onSubmit={handleSend} className="space-y-4">
+              <textarea placeholder="Sorunuzu yazın..." className="w-full bg-slate-800 p-4 rounded-2xl border border-white/5 outline-none focus:border-yellow-500/50" 
+                value={formData.q} onChange={e => setFormData({...formData, q: e.target.value})} />
+              <div className="grid grid-cols-2 gap-2">
+                {formData.o.map((v, i) => (
+                  <input key={i} placeholder={`${String.fromCharCode(65+i)}) Seçenek`} className="bg-slate-800 p-3 rounded-xl border border-white/5 outline-none focus:border-yellow-500/50" 
+                    value={v} onChange={e => { const n = [...formData.o]; n[i] = e.target.value; setFormData({...formData, o: n})}} />
+                ))}
+              </div>
+              <select className="w-full bg-slate-800 p-4 rounded-2xl border border-white/5 outline-none" value={formData.a} onChange={e => setFormData({...formData, a: e.target.value})}>
+                <option value="">Doğru Cevabı Seçin</option>
+                {formData.o.map(v => v && <option key={v} value={v}>{v}</option>)}
+              </select>
+              <button disabled={status === 'loading'} className="w-full py-4 bg-yellow-600 hover:bg-yellow-500 rounded-2xl font-bold uppercase tracking-widest transition-all">
+                {status === 'loading' ? <Loader2 className="animate-spin mx-auto"/> : 'GÖNDER'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   if (view === 'admin') {
-    if (!isLogged) {
-      return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 p-8 w-full max-w-sm rounded-2xl">
-            <h2 className="text-white font-bold mb-4 text-center">Admin Girişi</h2>
-            <input type="password" placeholder="Şifre (1234)" className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white mb-4 outline-none" 
-              onChange={e => setAdminPass(e.target.value)} />
-            <div className="flex gap-2">
-              <button onClick={()=>setView('home')} className="flex-1 bg-slate-700 text-white p-3 rounded-xl">İptal</button>
-              <button onClick={() => { if(adminPass === '1234') { setIsLogged(true); fetchPending(); } else alert("Şifre Yanlış!"); }} 
-                className="flex-1 bg-yellow-600 text-white p-3 rounded-xl">Giriş</button>
-            </div>
+    if (!isLogged) return (
+      <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-6 text-white">
+        <div className="bg-slate-900 border border-white/10 p-10 rounded-[40px] w-full max-w-sm text-center shadow-2xl">
+          <Lock size={48} className="mx-auto text-yellow-500 mb-6" />
+          <input type="password" placeholder="Şifre" className="w-full p-4 bg-slate-800 rounded-2xl mb-4 text-center outline-none border border-white/5 focus:border-yellow-500/50" onChange={e => setPass(e.target.value)} />
+          <div className="flex gap-2">
+            <button onClick={() => setView('home')} className="flex-1 py-4 bg-slate-800 rounded-2xl font-bold">İPTAL</button>
+            <button onClick={() => { if(pass === '1234') { setIsLogged(true); fetchPending(); } else alert("Şifre Yanlış!"); }} className="flex-1 py-4 bg-yellow-600 rounded-2xl font-bold">GİRİŞ</button>
           </div>
         </div>
-      );
-    }
+      </div>
+    );
     return (
-      <div className="min-h-screen bg-slate-950 p-4 text-white">
+      <div className="min-h-screen bg-[#070b14] text-white p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="font-bold text-xl">Onay Bekleyen Sorular ({pending.length})</h1>
-            <button onClick={()=>setView('home')} className="bg-slate-800 px-4 py-2 rounded-lg text-sm">Çıkış</button>
+          <div className="flex justify-between items-center mb-10">
+            <h1 className="text-2xl font-bold flex items-center gap-3"><Database className="text-yellow-500"/> Bekleyen Sorular ({pending.length})</h1>
+            <button onClick={() => { setIsLogged(false); setView('home'); }} className="text-slate-400 hover:text-white">Çıkış</button>
           </div>
           <div className="grid gap-4">
             {pending.map(q => (
-              <div key={q.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+              <div key={q.id} className="bg-slate-900 border border-white/5 p-6 rounded-2xl flex justify-between items-center group">
                 <div>
-                  <p className="text-yellow-500 text-xs font-bold">{q.language.toUpperCase()}</p>
-                  <p className="mt-1">{q.question_text}</p>
+                  <div className="flex gap-2 mb-2">
+                    <span className="bg-yellow-500/20 text-yellow-500 text-[10px] px-2 py-0.5 rounded font-bold">{q.language.toUpperCase()}</span>
+                    <span className="bg-blue-500/20 text-blue-500 text-[10px] px-2 py-0.5 rounded font-bold">SEVİYE {q.difficulty}</span>
+                  </div>
+                  <p className="text-lg">{q.question_text}</p>
                 </div>
-                <button onClick={()=>approve(q.id)} className="p-3 bg-green-600 hover:bg-green-500 rounded-xl transition-colors"><CheckCircle size={20}/></button>
+                <button onClick={() => approve(q.id)} className="p-4 bg-green-600/20 text-green-500 rounded-2xl hover:bg-green-600 hover:text-white transition-all shadow-lg"><CheckCircle/></button>
               </div>
             ))}
-            {pending.length === 0 && <p className="text-center text-slate-500 mt-10">Bekleyen soru yok.</p>}
+            {pending.length === 0 && <div className="text-center py-20 text-slate-500 italic">Onay bekleyen soru bulunamadı.</div>}
           </div>
         </div>
       </div>
     );
   }
 
+  // --- ANA MENÜ ---
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 p-8 w-full max-w-md text-center rounded-3xl shadow-2xl">
-        <img src="https://static.wixstatic.com/media/7e2174_63be697a3dd64d06b050165599965a9a~mv2.png" className="h-20 mx-auto mb-6" alt="Logo" />
-        <h1 className="text-xl font-black text-white mb-6 tracking-widest">{TRANSLATIONS[lang].title}</h1>
-        
-        <div className="flex justify-center gap-2 mb-8">
-          {(['ku','tr','en'] as const).map(l => (
-            <button key={l} onClick={()=>setLang(l)} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${lang === l ? 'bg-yellow-500 text-black border-yellow-500' : 'text-slate-400 border-slate-800'}`}>{l.toUpperCase()}</button>
-          ))}
-        </div>
+    <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-[#070b14] to-[#070b14]">
+      <div className="w-full max-w-md text-center">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900/40 border border-white/10 p-10 rounded-[48px] backdrop-blur-3xl shadow-2xl">
+          <img src="https://static.wixstatic.com/media/7e2174_63be697a3dd64d06b050165599965a9a~mv2.png" className="h-28 mx-auto mb-8 drop-shadow-[0_0_20px_rgba(234,179,8,0.4)]" alt="Logo" />
+          <h1 className="text-3xl font-black text-white mb-2 tracking-tighter uppercase">KÊ NAXWAZE</h1>
+          <p className="text-yellow-500 font-bold text-xs tracking-[0.3em] mb-10 uppercase opacity-80">BI SERKEVE</p>
+          
+          <div className="flex justify-center gap-2 mb-10">
+            {(['ku','tr','en'] as const).map(l => (
+              <button key={l} onClick={() => setLang(l)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${lang === l ? 'bg-yellow-500 text-black border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`}>{l.toUpperCase()}</button>
+            ))}
+          </div>
 
-        <div className="flex flex-col gap-3">
-          <button className="py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><Play size={20}/> {TRANSLATIONS[lang].start}</button>
-          <button onClick={()=>setView('submit')} className="py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl border border-slate-700 flex items-center justify-center gap-2"><PlusCircle size={18}/> {TRANSLATIONS[lang].submit_q}</button>
-          <button onClick={()=>setView('admin')} className="py-2 text-slate-600 text-xs flex items-center justify-center gap-1 mt-4 hover:text-slate-400"><Lock size={12}/> {TRANSLATIONS[lang].admin}</button>
-        </div>
+          <div className="flex flex-col gap-4">
+            <button className="group relative overflow-hidden py-5 bg-yellow-600 rounded-[24px] font-black text-white text-lg tracking-widest shadow-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
+              <Play fill="white" size={24} /> {lang === 'ku' ? 'DEST PÊ BIKE' : lang === 'tr' ? 'BAŞLA' : 'START'}
+            </button>
+            <button onClick={() => setView('submit')} className="py-4 bg-white/5 border border-white/10 rounded-[20px] font-bold text-slate-200 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+              <PlusCircle size={20}/> {lang === 'ku' ? 'Pirsê Bişîne' : lang === 'tr' ? 'Soru Gönder' : 'Submit Question'}
+            </button>
+            <button onClick={() => setView('admin')} className="text-slate-600 text-[10px] flex items-center justify-center gap-1 mt-6 hover:text-slate-400 transition-colors uppercase tracking-widest font-bold">
+              <Lock size={10}/> Admin Control
+            </button>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
