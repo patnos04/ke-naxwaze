@@ -40,15 +40,16 @@ app.post("/api/questions/submit", async (req, res) => {
   const { question, options, answer, level } = req.body;
   try {
     const supabase = getSupabase();
+    // Sütun isimlerini veritabanındaki gibi küçük harf yapıyoruz
     const { error } = await supabase
       .from("questions")
       .insert([
         { 
           question, 
-          optionA: options[0], 
-          optionB: options[1], 
-          optionC: options[2], 
-          optionD: options[3], 
+          optiona: options[0], 
+          optionb: options[1], 
+          optionc: options[2], 
+          optiond: options[3], 
           answer, 
           level, 
           status: 'pending' 
@@ -72,7 +73,17 @@ app.get("/api/questions/pending", async (req, res) => {
       .eq("status", "pending");
     
     if (error) throw error;
-    res.json(data);
+    
+    // Verileri frontend'in beklediği büyük harf formatına çeviriyoruz
+    const formattedData = data?.map((q: any) => ({
+      ...q,
+      optionA: q.optiona,
+      optionB: q.optionb,
+      optionC: q.optionc,
+      optionD: q.optiond
+    }));
+    
+    res.json(formattedData);
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -119,19 +130,27 @@ app.get("/api/questions/approved", async (req, res) => {
       .eq("status", "approved");
     
     if (error) throw error;
-    res.json(data);
+
+    // Verileri frontend'in beklediği büyük harf formatına çeviriyoruz
+    const formattedData = data?.map((q: any) => ({
+      ...q,
+      optionA: q.optiona,
+      optionB: q.optionb,
+      optionC: q.optionc,
+      optionD: q.optiond
+    }));
+    
+    res.json(formattedData);
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
-// Hata yakalayıcı (JSON döndürmesini garanti eder)
 app.use((err: any, req: any, res: any, next: any) => {
   console.error(err);
   res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
 });
 
-// Sadece yerel geliştirmede çalışır
 if (process.env.NODE_ENV !== "production") {
   const PORT = 3000;
   app.listen(PORT, "0.0.0.0", () => {
